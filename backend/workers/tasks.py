@@ -133,8 +133,15 @@ def process_tender_async(self, tender_id: int):
         db.commit()
 
         # ── Step 3: AI criteria extraction ──
-        criteria_data, full_text = _run_async(workflow.process_tender_chunks(chunks))
-        logger.info("Gemini extracted %d criteria for tender %s", len(criteria_data), tender_id)
+        try:
+            criteria_data, full_text = _run_async(workflow.process_tender_chunks(chunks))
+        except RuntimeError as e:
+            # ✅ LangChain chain raised exception (criteria extraction failed)
+            logger.error("Criteria extraction failed: %s", e)
+            _mark_entity_failed(db, Tender, tender_id, f"Criteria extraction failed: {str(e)[:500]}")
+            raise self.retry(exc=e)  # Celery retries with backoff
+        
+        logger.info("Extracted %d criteria for tender %s", len(criteria_data), tender_id)
 
         db.query(Criterion).filter(Criterion.tender_id == tender.id).delete()
         tender.raw_text = full_text

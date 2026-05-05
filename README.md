@@ -1,43 +1,79 @@
-# TenderMind API & Pipeline (Native + Supabase Setup)
+# TenderMind API & Pipeline (FastAPI + PostgreSQL + Celery + LangChain)
 
-TenderMind is an AI-powered co-pilot for government procurement. It uses FastAPI, PostgreSQL (via Supabase), Celery, Redis, and Gemini to ingest, evaluate, and score tender documents and bidder submissions.
+TenderMind is an AI-powered co-pilot for government procurement. It uses:
+- **Backend**: FastAPI
+- **Database**: PostgreSQL (SQLAlchemy ORM)
+- **Async Queue**: Celery (Redis broker)
+- **AI Orchestration**: LangChain + Google Gemini 1.5 Flash
+- **Frontend**: React
+- **Monitoring**: Flower (Celery Dashboard)
 
-This guide explains how to run the entire backend stack natively on your Windows machine without relying on Docker for the Python application.
+This guide explains how to run the entire stack using Docker Compose.
 
 ---
 
 ## 🚀 1. Prerequisites
 
-1. **Python 3.10+** installed on your system.
-2. **Tesseract-OCR for Windows**:
-   - Download the 64-bit installer: [UB-Mannheim Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
-   - Install it (usually to `C:\Program Files\Tesseract-OCR`).
-3. **Redis**:
-   - Celery requires a Redis message broker. You can install Redis natively for Windows or use a free cloud provider like [Upstash](https://upstash.com/).
-   - Copy your Redis connection URL (e.g., `rediss://...`).
-4. **Supabase Account**:
-   - Create a free project at [Supabase](https://supabase.com/).
-   - Go to Project Settings -> Database and copy your **Connection String (URI)**. Ensure you use the **Transaction connection pooler** (usually port `6543`).
-5. **Google Gemini API Key**.
+1. **Docker & Docker Compose**: [Install Docker](https://docs.docker.com/get-docker/)
+2. **Google Gemini API Key**: Get from [Google AI Studio](https://aistudio.google.com/)
+3. **Git**: For cloning and version control
+4. **Port availability**: Ensure ports 8000 (API), 3000 (Frontend), 5432 (DB), 6379 (Redis), 5555 (Flower) are available
 
 ---
 
 ## ⚙️ 2. Environment Setup
 
-Create a `.env` file inside the `backend/` folder (`c:\Coding\AI4BHARAT\backend\.env`) with the following contents:
+Create a `.env` file in the project root (`c:\Coding\AI4BHARAT\.env`) with:
 
 ```env
-# Supabase Database URL
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
-
-# Redis Broker (Upstash URL or local Windows Redis)
-REDIS_URL=rediss://default:password@your-upstash.upstash.io:33950
-
-# AI Provider
+# Google Gemini API
 GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-# Directory to store uploaded files
-UPLOAD_ROOT=./uploads
+That's it! Docker Compose will automatically set up PostgreSQL and Redis.
+
+---
+
+## 🐳 3. Run with Docker Compose
+
+```bash
+cd c:\Coding\AI4BHARAT
+
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f api
+
+# Stop services
+docker-compose down
+```
+
+**Services available**:
+- **API**: http://localhost:8000/api/docs (Swagger UI)
+- **Frontend**: http://localhost:3000
+- **Flower**: http://localhost:5555
+- **Health Check**: `curl http://localhost:8000/health`
+
+---
+
+## 📋 4. Verify Installation
+
+```bash
+# Check all services are healthy
+docker-compose ps
+
+# Check API health
+curl http://localhost:8000/health
+# Expected response: {"api":"ok","db":"ok","redis":"ok"}
+
+# View Flower dashboard
+open http://localhost:5555
+```
+
+---
+
+## 🧪 5. Quick Start: Upload Tender & Bidder
 ```
 
 ---

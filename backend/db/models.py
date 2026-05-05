@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON, Index
 from sqlalchemy.orm import relationship
 from db.database import Base
 import datetime
@@ -25,7 +25,7 @@ class Tender(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(Text)
-    file_path = Column(String)
+    file_path = Column(String, unique=True, nullable=True)  # ✅ Prevent duplicate uploads
     raw_text = Column(Text)
     status = Column(String, default="uploaded", nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -33,6 +33,11 @@ class Tender(Base):
     criteria = relationship("Criterion", back_populates="tender")
     bidders = relationship("Bidder", back_populates="tender")
     documents = relationship("Document", back_populates="tender")
+    
+    __table_args__ = (
+        Index('idx_tender_status', 'status'),
+        Index('idx_tender_created', 'created_at'),
+    )
 
 class Criterion(Base):
     __tablename__ = "criteria"
@@ -44,6 +49,10 @@ class Criterion(Base):
     
     tender = relationship("Tender", back_populates="criteria")
     verdicts = relationship("Verdict", back_populates="criterion")
+    
+    __table_args__ = (
+        Index('idx_criterion_tender_id', 'tender_id'),
+    )
 
 class Bidder(Base):
     __tablename__ = "bidders"
@@ -58,6 +67,11 @@ class Bidder(Base):
     tender = relationship("Tender", back_populates="bidders")
     verdicts = relationship("Verdict", back_populates="bidder")
     documents = relationship("Document", back_populates="bidder")
+    
+    __table_args__ = (
+        Index('idx_bidder_tender_id', 'tender_id'),
+        Index('idx_bidder_status', 'status'),
+    )
 
 
 class Document(Base):
@@ -74,6 +88,12 @@ class Document(Base):
 
     tender = relationship("Tender", back_populates="documents")
     bidder = relationship("Bidder", back_populates="documents")
+    
+    __table_args__ = (
+        Index('idx_document_tender_id', 'tender_id'),
+        Index('idx_document_bidder_id', 'bidder_id'),
+        Index('idx_document_combined', 'tender_id', 'bidder_id'),
+    )
 
 class Verdict(Base):
     __tablename__ = "verdicts"
@@ -89,6 +109,12 @@ class Verdict(Base):
     
     bidder = relationship("Bidder", back_populates="verdicts")
     criterion = relationship("Criterion", back_populates="verdicts")
+    
+    __table_args__ = (
+        Index('idx_verdict_bidder_id', 'bidder_id'),
+        Index('idx_verdict_criterion_id', 'criterion_id'),
+        Index('idx_verdict_status', 'status'),
+    )
 
 class Correction(Base):
     __tablename__ = "corrections"

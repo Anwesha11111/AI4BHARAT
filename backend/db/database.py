@@ -20,6 +20,10 @@ engine = create_engine(
     max_overflow=10,
     pool_recycle=1800,        # Recycle connections every 30 min
     pool_timeout=30,
+    connect_args={
+        "connect_timeout": 10,  # ✅ 10-second connection timeout
+        "options": "-c isolation_level=READ_COMMITTED"  # ✅ Read-committed isolation (safe + performant)
+    },
     echo=False,
 )
 

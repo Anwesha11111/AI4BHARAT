@@ -1,16 +1,22 @@
 @echo off
 echo ==============================================
-echo   Starting TenderMind API (FastAPI + Supabase)
+echo   Starting TenderMind (FastAPI + PostgreSQL + Celery + LangChain)
 echo ==============================================
-cd backend
-if not exist "venv\Scripts\activate.bat" (
-    echo Error: Virtual environment not found in backend\venv
-    echo Please run 'python -m venv venv' and 'pip install -r requirements.txt'
-    pause
-    exit /b 1
-)
-call venv\Scripts\activate.bat
-echo Virtual environment activated.
-echo Starting FastAPI server...
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+echo.
+echo This script starts all services using Docker Compose:
+echo   - PostgreSQL 15 (database)
+echo   - Redis 7 (broker)
+echo   - FastAPI (API server)
+echo   - Celery Worker (async processing)
+echo   - Flower (monitoring)
+echo   - React (frontend)
+echo.
+echo Services will be available at:
+echo   - API:     http://localhost:8000/api/docs
+echo   - Frontend: http://localhost:3000
+echo   - Flower:   http://localhost:5555
+echo.
+
+docker-compose up
+
 pause

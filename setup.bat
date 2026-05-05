@@ -1,50 +1,50 @@
 @echo off
 echo ==============================================
-echo   TenderMind Setup Script
+echo   TenderMind Docker Compose Setup
 echo ==============================================
 echo.
 
-REM Check Python
-python --version >nul 2>&1
+REM Check Docker
+docker --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python not found. Install Python 3.10+ from https://python.org
+    echo ERROR: Docker not found. Install Docker Desktop from https://docker.com/products/docker-desktop
     pause
     exit /b 1
 )
-echo [OK] Python found
+echo [OK] Docker found
 
-cd backend
-
-REM Create virtual environment if missing
-if not exist "venv\Scripts\activate.bat" (
-    echo Creating virtual environment...
-    python -m venv venv
-    if errorlevel 1 (
-        echo ERROR: Failed to create virtual environment
-        pause
-        exit /b 1
-    )
-    echo [OK] Virtual environment created
-) else (
-    echo [OK] Virtual environment already exists
-)
-
-REM Activate and install packages
-call venv\Scripts\activate.bat
-echo Installing dependencies (this may take a few minutes)...
-pip install -r requirements.txt
+REM Check Docker Compose
+docker-compose --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: pip install failed
+    echo ERROR: Docker Compose not found. Install Docker Desktop which includes Compose
     pause
     exit /b 1
 )
-echo [OK] Dependencies installed
+echo [OK] Docker Compose found
 
-REM Create uploads directory
-if not exist "uploads" (
-    mkdir uploads
-    echo [OK] Created uploads directory
+echo.
+echo Checking .env file...
+if not exist ".env" (
+    echo Creating .env file (you MUST edit this with your GEMINI_API_KEY)
+    echo GEMINI_API_KEY=your_gemini_api_key_here > .env
+    echo ERROR: .env file created but empty!
+    echo.
+    echo NEXT STEPS:
+    echo   1. Edit .env and set GEMINI_API_KEY=your_actual_key
+    echo   2. Run setup.bat again
+    echo.
+    pause
+    exit /b 1
 )
+
+REM Check if GEMINI_API_KEY is set
+for /f "tokens=2 delims==" %%i in (findstr /i "GEMINI_API_KEY" .env) do set GEMINI_KEY=%%i
+if "%GEMINI_KEY%"=="" (
+    echo ERROR: GEMINI_API_KEY not set in .env
+    pause
+    exit /b 1
+)
+echo [OK] GEMINI_API_KEY found
 
 echo.
 echo ==============================================
@@ -52,22 +52,20 @@ echo   Setup Complete!
 echo ==============================================
 echo.
 echo NEXT STEPS:
-echo   1. Edit backend\.env and set:
-echo      - REDIS_URL      (get a free Redis from https://upstash.com)
-echo      - GEMINI_API_KEY (get from https://aistudio.google.com)
-echo      - TESSERACT_CMD  (install Tesseract from https://github.com/UB-Mannheim/tesseract/wiki)
+echo   Start the system:
+echo      docker-compose up -d
 echo.
-echo   2. Run the Supabase schema:
-echo      - Open backend\supabase_schema.sql in Supabase SQL editor and run it
+echo   View logs:
+echo      docker-compose logs -f api
 echo.
-echo   3. Start the API:
-echo      Double-click start-api.bat
+echo   Services available:
+echo      - API:     http://localhost:8000/api/docs
+echo      - Frontend: http://localhost:3000
+echo      - Flower:   http://localhost:5555
+echo      - Health:   http://localhost:8000/health
 echo.
-echo   4. Start the Worker (in a separate terminal):
-echo      Double-click start-worker.bat
-echo.
-echo   5. Test the system:
-echo      cd backend
-echo      venv\Scripts\python test_e2e.py --skip-wait
+echo   Stop the system:
+echo      docker-compose down
 echo.
 pause
+

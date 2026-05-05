@@ -6,6 +6,7 @@ import os
 from docx import Document
 from langdetect import detect
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,29 @@ else:
 
 MAX_PDF_PAGES = 200       # Cap to prevent multi-hour OCR on huge scanned docs
 OCR_DPI = 150             # Lower DPI = faster OCR; 150 is good enough for text
+OCR_TIMEOUT_SEC = 30      # ✅ Timeout for OCR per page (prevent hangs on pathological images)
+
+
+def _ocr_with_timeout(img, timeout_sec=OCR_TIMEOUT_SEC) -> str:
+    """
+    ✅ Runs Tesseract OCR with timeout using ThreadPoolExecutor.
+    Returns: OCR text, or empty string if timeout exceeded.
+    """
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        try:
+            future = executor.submit(
+                pytesseract.image_to_string,
+                img,
+                lang="eng+hin",
+                config="--psm 6 --oem 1"
+            )
+            return future.result(timeout=timeout_sec)
+        except FuturesTimeoutError:
+            logger.warning("OCR timeout after %d seconds (pathological image?)", timeout_sec)
+            return ""  # ✅ Return empty rather than crash
+        except Exception as e:
+            logger.warning("OCR execution failed: %s", e)
+            return ""  # ✅ Graceful fallback
 
 
 class DocumentProcessor:
@@ -59,11 +83,8 @@ class DocumentProcessor:
                         # FIX: use PNG format bytes so PIL can parse the header
                         img_bytes = pix.tobytes("png")
                         img = Image.open(io.BytesIO(img_bytes))
-                        text = pytesseract.image_to_string(
-                            img,
-                            lang="eng+hin",
-                            config="--psm 6 --oem 1"
-                        )
+                        # ✅ FIX: OCR with timeout (prevent hanging on pathological images)
+                        text = _ocr_with_timeout(img, timeout_sec=OCR_TIMEOUT_SEC)
                         source_type = "pdf_ocr"
                     except Exception as ocr_err:
                         logger.warning(
@@ -130,10 +151,11 @@ class DocumentProcessor:
         }]
 
     def process_image(self, file_path: str) -> list[dict]:
-        """Processes image files using OCR."""
+        """Processes image files using OCR with timeout."""
         try:
             img = Image.open(file_path)
-            text = pytesseract.image_to_string(img, lang="eng+hin", config="--psm 6 --oem 1")
+            # ✅ Use timeout wrapper for OCR
+            text = _ocr_with_timeout(img, timeout_sec=OCR_TIMEOUT_SEC)
         except Exception as e:
             logger.error("Image OCR failed for %s: %s", file_path, e)
             raise ValueError(f"Image OCR failed: {os.path.basename(file_path)}") from e

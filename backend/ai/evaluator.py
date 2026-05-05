@@ -1,9 +1,18 @@
-import google.generativeai as genai
+"""
+Bidder Evaluator using LangChain + Gemini API + Semantic Search
+✅ Uses LangChain chains for structured output
+✅ Semantic similarity for relevant excerpt retrieval
+✅ Automatic retry with exponential backoff
+✅ Raises exceptions (doesn't silently fail)
+"""
+
 import os
 import json
 import re
-import time
 import logging
+from langchain_google_generativeai import ChatGoogleGenerativeAI
+from langchain.prompts import PromptTemplate
+from langchain.output_parsers import JsonOutputParser
 from sentence_transformers import SentenceTransformer, util
 import torch
 
@@ -24,11 +33,53 @@ def get_semantic_model() -> SentenceTransformer:
 
 class BidderEvaluator:
     def __init__(self):
+        """Initialize LangChain Gemini model and evaluation chain."""
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not set — evaluations will fail")
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # ✅ LangChain ChatGoogleGenerativeAI with built-in retry
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            api_key=self.api_key,
+            temperature=0,
+            max_retries=3,  # ✅ Built-in LangChain retry
+        )
+        
+        # ✅ LangChain PromptTemplate
+        self.prompt = PromptTemplate(
+            input_variables=["criterion", "criterion_type", "context"],
+            template="""You are a government procurement auditor evaluating a bidder's submission.
+
+Criterion: {criterion}
+Type: {criterion_type}
+
+Relevant Evidence from Bidder Documents:
+{context}
+
+Task:
+1. Determine if the bidder satisfies the criterion.
+2. Provide a clear 'status': "pass", "fail", or "review_needed".
+3. Extract the exact excerpt that serves as evidence (copy verbatim).
+4. Provide detailed reasoning in 1-2 sentences.
+5. Rate 'completeness' (0.0 to 1.0) of the evidence found.
+
+Output MUST be valid JSON only — no markdown, no extra text:
+{{
+    "status": "pass" | "fail" | "review_needed",
+    "excerpt": "...",
+    "reasoning": "...",
+    "completeness": 0.9,
+    "page": 1,
+    "source_doc": "filename.pdf"
+}}"""
+        )
+        
+        # ✅ LangChain JsonOutputParser for structured output
+        self.parser = JsonOutputParser()
+        
+        # ✅ Build the chain: Prompt → LLM → Parser
+        self.chain = self.prompt | self.llm | self.parser
 
     def find_relevant_excerpts(self, criterion_text: str, bidder_chunks: list, top_k: int = 3) -> list:
         """Uses semantic similarity to find the top-k most relevant bidder chunks."""
@@ -72,8 +123,13 @@ class BidderEvaluator:
 
     def evaluate_bidder_criterion(self, criterion: dict, bidder_chunks: list) -> dict:
         """
-        Evaluates a single criterion for a bidder using Gemini + semantic retrieval.
-        Returns a result dict always — never raises.
+        Evaluates a single criterion for a bidder using LangChain + semantic retrieval.
+        
+        ✅ Uses LangChain chain with automatic retry
+        ✅ Raises exception if all attempts fail (no silent failures)
+        
+        Returns: dict with keys: status, excerpt, reasoning, confidence, completeness, page, source_doc
+        Raises: RuntimeError if evaluation fails after all retries
         """
         relevant_chunks = self.find_relevant_excerpts(criterion["text"], bidder_chunks)
 
@@ -83,6 +139,7 @@ class BidderEvaluator:
         ])
 
         if not context.strip():
+            # Not enough evidence, but don't raise — return review_needed
             return {
                 "status": "review_needed",
                 "excerpt": "",
@@ -93,78 +150,36 @@ class BidderEvaluator:
                 "source_doc": None,
             }
 
-        prompt = self._build_prompt(criterion, context)
-
-        for attempt in range(3):
-            try:
-                response = self.model.generate_content(prompt)
-                result = self._parse_json_object(response.text)
-
-                # Compute real confidence (not hardcoded)
-                semantic_match = max((c.get("semantic_score", 0) for c in relevant_chunks), default=0)
-                ocr_quality = self._infer_ocr_quality(relevant_chunks)
-                result["confidence"] = self.compute_confidence(
-                    ocr_quality=ocr_quality,
-                    semantic_match=semantic_match,
-                    completeness=float(result.get("completeness", 0.5)),
-                )
-                return result
-
-            except json.JSONDecodeError as je:
-                logger.warning("Gemini returned invalid JSON on attempt %d: %s", attempt + 1, je)
-            except Exception as e:
-                wait = 2 ** attempt
-                logger.warning("Gemini evaluation attempt %d failed: %s. Retrying in %ds", attempt + 1, e, wait)
-                time.sleep(wait)
-
-        logger.error("All Gemini attempts failed for criterion: %s", criterion.get("text", "")[:60])
-        return {
-            "status": "review_needed",
-            "excerpt": "",
-            "reasoning": "Gemini evaluation failed after 3 retries.",
-            "confidence": 0.0,
-            "completeness": 0.0,
-            "page": None,
-            "source_doc": None,
-        }
-
-    def _build_prompt(self, criterion: dict, context: str) -> str:
-        return f"""You are a government procurement auditor evaluating a bidder's submission.
-
-Criterion: {criterion['text']}
-Type: {criterion.get('type', 'mandatory')}
-
-Relevant Evidence from Bidder Documents:
-{context}
-
-Task:
-1. Determine if the bidder satisfies the criterion.
-2. Provide a clear 'status': "pass", "fail", or "review_needed".
-3. Extract the exact excerpt that serves as evidence (copy verbatim).
-4. Provide detailed reasoning in 1-2 sentences.
-5. Rate 'completeness' (0.0 to 1.0) of the evidence found.
-
-Output MUST be valid JSON only — no markdown, no extra text:
-{{
-    "status": "pass" | "fail" | "review_needed",
-    "excerpt": "...",
-    "reasoning": "...",
-    "completeness": 0.9,
-    "page": 1,
-    "source_doc": "filename.pdf"
-}}"""
-
-    def _parse_json_object(self, content: str) -> dict:
-        """Robust JSON object extraction — handles markdown fences."""
-        content = re.sub(r"```(?:json)?\s*", "", content).strip().rstrip("`")
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start == -1 or end == 0:
-            raise ValueError(f"No JSON object in response: {content[:200]}")
-        parsed = json.loads(content[start:end])
-        if not isinstance(parsed, dict):
-            raise ValueError(f"Expected JSON object, got: {type(parsed)}")
-        return parsed
+        try:
+            # ✅ Invoke LangChain chain (includes built-in retry)
+            result = self.chain.invoke({
+                "criterion": criterion["text"],
+                "criterion_type": criterion.get("type", "mandatory"),
+                "context": context
+            })
+            
+            # Ensure result is a dict
+            if not isinstance(result, dict):
+                raise ValueError(f"Expected dict from parser, got: {type(result)}")
+            
+            # ✅ Compute real confidence (not hardcoded)
+            semantic_match = max((c.get("semantic_score", 0) for c in relevant_chunks), default=0)
+            ocr_quality = self._infer_ocr_quality(relevant_chunks)
+            result["confidence"] = self.compute_confidence(
+                ocr_quality=ocr_quality,
+                semantic_match=semantic_match,
+                completeness=float(result.get("completeness", 0.5)),
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error("LangChain chain failed for criterion: %s | Error: %s", 
+                        criterion.get("text", "")[:60], e)
+            # ✅ Raise exception (don't silently return review_needed)
+            raise RuntimeError(f"Failed to evaluate criterion '{criterion.get('text', '')[:60]}' using LangChain: {e}") from e
 
 
+# ✅ Singleton instance
 evaluator = BidderEvaluator()
+

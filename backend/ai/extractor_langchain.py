@@ -168,4 +168,3 @@ Respond ONLY with the JSON array. No markdown, no explanation."""
 
 # ✅ Singleton instance
 extractor = CriterionExtractor()
-
