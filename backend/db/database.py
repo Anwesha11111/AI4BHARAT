@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # Must be called before reading any env vars
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -6,15 +9,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@db:5432/tendermind")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/tendermind")
 
+# psycopg2 reads sslmode from the connection URL query string.
+# Do NOT pass sslmode via connect_args — it causes a conflict.
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,       # Test connection before use — prevents stale connection crashes
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
     pool_recycle=1800,        # Recycle connections every 30 min
-    connect_args={"connect_timeout": 10},
+    pool_timeout=30,
+    echo=False,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -32,6 +38,8 @@ def get_db():
     finally:
         db.close()
 
+
 def init_db():
-    from . import models
-    models.Base.metadata.create_all(bind=engine)
+    from . import models  # noqa: F401 — triggers model registration
+    Base.metadata.create_all(bind=engine)
+    logger.info("DB tables ensured")

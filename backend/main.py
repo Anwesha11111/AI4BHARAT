@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # MUST be first — before any os.getenv() calls
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -7,6 +10,7 @@ import logging
 import json
 import os
 from api.routes import router as api_router
+from api.export import export_router
 from db.database import init_db, get_db, engine
 from fastapi import Depends
 
@@ -62,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
+app.include_router(export_router, prefix="/api")
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
 
