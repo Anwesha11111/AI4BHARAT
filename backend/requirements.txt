@@ -1,9 +1,10 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 pydantic-settings
-celery
+pydantic
+celery[redis]
 redis
 python-multipart
 python-dotenv
@@ -11,6 +12,7 @@ google-generativeai
 pymupdf
 python-docx
 pytesseract
+Pillow
 langdetect
 lingua-language-detector
 sentence-transformers
@@ -19,3 +21,4 @@ transformers
 pandas
 python-jose[cryptography]
 passlib[bcrypt]
+httpx

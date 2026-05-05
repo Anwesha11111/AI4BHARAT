@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # Load .env before any os.getenv() calls
+
 from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
 import os
@@ -10,10 +13,12 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
 celery_app = Celery(
     "tasks",
-    broker=os.getenv("REDIS_URL", "redis://redis:6379/0"),
-    backend=os.getenv("REDIS_URL", "redis://redis:6379/0"),
+    broker=_REDIS_URL,
+    backend=_REDIS_URL,
 )
 
 celery_app.conf.update(
@@ -25,6 +30,8 @@ celery_app.conf.update(
     task_acks_late=True,            # Only ack after completion → safe re-queue on crash
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,   # One task at a time per worker (OCR is CPU-heavy)
+    result_expires=3600,            # Keep results for 1 hour
+    broker_connection_retry_on_startup=True,
 )
 
 

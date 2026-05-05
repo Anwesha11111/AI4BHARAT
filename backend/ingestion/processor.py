@@ -9,14 +9,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ── Tesseract path (required on Windows where Tesseract is not on PATH) ──────
+_tesseract_cmd = os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+if os.path.isfile(_tesseract_cmd):
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
+else:
+    logger.warning(
+        "Tesseract not found at '%s'. Set TESSERACT_CMD env var. OCR will fail.",
+        _tesseract_cmd,
+    )
+
 MAX_PDF_PAGES = 200       # Cap to prevent multi-hour OCR on huge scanned docs
 OCR_DPI = 150             # Lower DPI = faster OCR; 150 is good enough for text
 
 
 class DocumentProcessor:
-    def __init__(self, tesseract_cmd=None):
-        if tesseract_cmd:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    def __init__(self):
+        pass
 
     def process_pdf(self, file_path: str) -> list[dict]:
         """
@@ -144,6 +153,9 @@ class DocumentProcessor:
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        if os.path.getsize(file_path) == 0:
+            raise ValueError(f"File is empty: {os.path.basename(file_path)}")
+
         ext = os.path.splitext(file_path)[1].lower()
         logger.info("Processing file: %s (type=%s)", os.path.basename(file_path), ext)
 
@@ -154,7 +166,8 @@ class DocumentProcessor:
         elif ext in (".png", ".jpg", ".jpeg", ".tiff", ".tif"):
             return self.process_image(file_path)
         else:
-            raise ValueError(f"Unsupported file type: {ext}. Supported: pdf, docx, png, jpg, jpeg, tiff")
+            raise ValueError(f"Unsupported file type: {ext}. Supported: pdf, docx, png, jpg, jpeg, tiff, tif")
+
 
 
 def _safe_detect(text: str) -> str:
