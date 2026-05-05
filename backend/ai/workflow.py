@@ -21,6 +21,12 @@ class TenderMindWorkflow:
         criteria = extractor.extract_criteria(full_text)
         return criteria, full_text
 
+    async def process_tender_chunks(self, chunks):
+        """Runs tender AI extraction on already-ingested chunks."""
+        full_text = "\n".join([c.get("text", "") for c in chunks])
+        criteria = extractor.extract_criteria(full_text)
+        return criteria, full_text
+
     async def evaluate_bidder(self, bidder_folder, criteria):
         """
         Evaluates a bidder against a list of criteria.
@@ -54,6 +60,29 @@ class TenderMindWorkflow:
                 "evaluation": evaluation
             })
             
+        return results
+
+    async def evaluate_bidder_chunks(self, bidder_chunks, criteria):
+        """Runs bidder evaluation on already-ingested chunks."""
+        all_chunks = []
+        for chunk in bidder_chunks:
+            processed_chunk = handler.process_chunk(chunk)
+            all_chunks.append(processed_chunk)
+
+        results = []
+        for criterion in criteria:
+            evaluation = evaluator.evaluate_bidder_criterion(criterion, all_chunks)
+
+            confidence = evaluation.get("confidence", 0)
+            if confidence < 0.8:
+                evaluation["status"] = "review_needed"
+                evaluation["reasoning"] += " (Flagged due to low confidence)"
+
+            results.append({
+                "criterion_id": criterion.get("id"),
+                "evaluation": evaluation
+            })
+
         return results
 
 workflow = TenderMindWorkflow()

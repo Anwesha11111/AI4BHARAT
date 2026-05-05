@@ -5,7 +5,7 @@ import { Upload, FileText, FolderPlus, Loader2 } from 'lucide-react';
 export const UploadForm = ({ onTenderUpload }: { onTenderUpload: (id: number) => void }) => {
   const [tenderFile, setTenderFile] = useState<File | null>(null);
   const [vendorName, setVendorName] = useState('');
-  const [folderPath, setFolderPath] = useState('');
+  const [bidderFiles, setBidderFiles] = useState<File[]>([]);
   const [tenderId, setTenderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,12 +26,12 @@ export const UploadForm = ({ onTenderUpload }: { onTenderUpload: (id: number) =>
 
   const handleBidderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenderId || !vendorName || !folderPath) return;
+    if (!tenderId || !vendorName || bidderFiles.length === 0) return;
     setLoading(true);
     try {
-      await uploadBidder(tenderId, vendorName, folderPath);
+      await uploadBidder(tenderId, vendorName, bidderFiles);
       setVendorName('');
-      setFolderPath('');
+      setBidderFiles([]);
       alert("Bidder submitted successfully!");
     } catch (err) {
       console.error(err);
@@ -87,15 +87,23 @@ export const UploadForm = ({ onTenderUpload }: { onTenderUpload: (id: number) =>
             onChange={(e) => setVendorName(e.target.value)}
             className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-400"
           />
-          <input 
-            type="text" 
-            placeholder="Folder Path (Local/S3)"
-            value={folderPath}
-            onChange={(e) => setFolderPath(e.target.value)}
-            className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-400"
-          />
+          <div className="border-2 border-dashed border-gray-600 rounded-xl p-5 hover:border-emerald-400 transition-colors">
+            <input
+              id="bidder-files-input"
+              type="file"
+              multiple
+              onChange={(e) => setBidderFiles(Array.from(e.target.files || []))}
+              className="hidden"
+            />
+            <label htmlFor="bidder-files-input" className="cursor-pointer block text-center">
+              <Upload className="mx-auto mb-2 text-gray-400" size={24} />
+              <p className="text-sm text-gray-400">
+                {bidderFiles.length > 0 ? `${bidderFiles.length} file(s) selected` : 'Select bidder files (PDF, DOCX, images)'}
+              </p>
+            </label>
+          </div>
           <button 
-            disabled={loading || !vendorName || !folderPath}
+            disabled={loading || !vendorName || bidderFiles.length === 0}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="animate-spin" size={18} />}

@@ -2,19 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { UploadForm } from './components/UploadForm';
 import { Scorecard } from './components/Scorecard';
 import { ReviewPanel } from './components/ReviewPanel';
-import { getScorecard } from './utils/api';
+import { getScorecard, getTenderStatus } from './utils/api';
 import { Brain, ShieldCheck, History, Database, LayoutDashboard } from 'lucide-react';
 
 const App = () => {
   const [activeTenderId, setActiveTenderId] = useState<number | null>(null);
   const [scorecardData, setScorecardData] = useState<any>(null);
   const [selectedVerdict, setSelectedVerdict] = useState<any>(null);
-  const [refreshInterval, setRefreshInterval] = useState<any>(null);
+  const [tenderStatus, setTenderStatus] = useState<string | null>(null);
 
   const fetchScorecard = async (id: number) => {
     try {
       const data = await getScorecard(id);
       setScorecardData(data);
+      setTenderStatus(data.status || null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchStatus = async (id: number) => {
+    try {
+      const data = await getTenderStatus(id);
+      setTenderStatus(data.status || null);
     } catch (err) {
       console.error(err);
     }
@@ -23,8 +33,11 @@ const App = () => {
   useEffect(() => {
     if (activeTenderId) {
       fetchScorecard(activeTenderId);
-      const interval = setInterval(() => fetchScorecard(activeTenderId), 5000);
-      setRefreshInterval(interval);
+      fetchStatus(activeTenderId);
+      const interval = setInterval(() => {
+        fetchScorecard(activeTenderId);
+        fetchStatus(activeTenderId);
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [activeTenderId]);
@@ -59,6 +72,19 @@ const App = () => {
         </header>
 
         <UploadForm onTenderUpload={(id) => setActiveTenderId(id)} />
+
+        {activeTenderId && tenderStatus && (
+          <div className="mb-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-700 bg-gray-900/60 text-sm">
+            <span className="text-gray-400">Tender #{activeTenderId} status:</span>
+            <span className={`font-semibold capitalize ${
+              tenderStatus === 'completed' ? 'text-emerald-400' :
+              tenderStatus === 'failed' ? 'text-red-400' :
+              tenderStatus === 'processing' ? 'text-amber-400' : 'text-blue-400'
+            }`}>
+              {tenderStatus}
+            </span>
+          </div>
+        )}
 
         {scorecardData && (
           <section className="animate-in fade-in slide-in-from-bottom-4 duration-700">

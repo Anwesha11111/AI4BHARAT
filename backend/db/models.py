@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON, Enum
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import datetime
@@ -32,10 +32,14 @@ class Tender(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(Text)
+    file_path = Column(String)
     raw_text = Column(Text)
+    status = Column(String, default="uploaded", nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     criteria = relationship("Criterion", back_populates="tender")
+    bidders = relationship("Bidder", back_populates="tender")
+    documents = relationship("Document", back_populates="tender")
 
 class Criterion(Base):
     __tablename__ = "criteria"
@@ -54,10 +58,29 @@ class Bidder(Base):
     tender_id = Column(Integer, ForeignKey("tenders.id"))
     vendor_id = Column(Integer, ForeignKey("vendors.id"))
     folder_path = Column(String)
+    status = Column(String, default="uploaded", nullable=False)
     submission_date = Column(DateTime, default=datetime.datetime.utcnow)
     
     vendor = relationship("Vendor")
+    tender = relationship("Tender", back_populates="bidders")
     verdicts = relationship("Verdict", back_populates="bidder")
+    documents = relationship("Document", back_populates="bidder")
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    id = Column(Integer, primary_key=True, index=True)
+    tender_id = Column(Integer, ForeignKey("tenders.id"), nullable=False)
+    bidder_id = Column(Integer, ForeignKey("bidders.id"), nullable=True)
+    text = Column(Text, nullable=False)
+    page = Column(Integer, nullable=False, default=1)
+    file_name = Column(String, nullable=False)
+    source_type = Column(String, nullable=False)
+    language = Column(String, default="unknown")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    tender = relationship("Tender", back_populates="documents")
+    bidder = relationship("Bidder", back_populates="documents")
 
 class Verdict(Base):
     __tablename__ = "verdicts"
@@ -95,10 +118,3 @@ class AuditLog(Base):
     actor = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     reason = Column(Text)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
