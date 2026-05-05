@@ -1,133 +1,112 @@
-# TenderMind API & Pipeline
+# TenderMind API & Pipeline (Native + Supabase Setup)
 
-TenderMind is an AI-powered co-pilot for government procurement. It uses FastAPI, PostgreSQL, Celery, Redis, and Gemini to ingest, evaluate, and score tender documents and bidder submissions.
+TenderMind is an AI-powered co-pilot for government procurement. It uses FastAPI, PostgreSQL (via Supabase), Celery, Redis, and Gemini to ingest, evaluate, and score tender documents and bidder submissions.
 
-## 🚀 Quick Start (For Team Members)
+This guide explains how to run the entire backend stack natively on your Windows machine without relying on Docker for the Python application.
 
-Follow these steps to run and test the complete pipeline locally.
+---
 
-### 1. Prerequisites
-- **Docker** and **Docker Compose** installed.
-- A valid **Google Gemini API Key**.
+## 🚀 1. Prerequisites
 
-### 2. Environment Setup
-Create a `.env` file in the root directory (`AI4BHARAT/.env`) with the following contents:
+1. **Python 3.10+** installed on your system.
+2. **Tesseract-OCR for Windows**:
+   - Download the 64-bit installer: [UB-Mannheim Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
+   - Install it (usually to `C:\Program Files\Tesseract-OCR`).
+3. **Redis**:
+   - Celery requires a Redis message broker. You can install Redis natively for Windows or use a free cloud provider like [Upstash](https://upstash.com/).
+   - Copy your Redis connection URL (e.g., `rediss://...`).
+4. **Supabase Account**:
+   - Create a free project at [Supabase](https://supabase.com/).
+   - Go to Project Settings -> Database and copy your **Connection String (URI)**. Ensure you use the **Transaction connection pooler** (usually port `6543`).
+5. **Google Gemini API Key**.
+
+---
+
+## ⚙️ 2. Environment Setup
+
+Create a `.env` file inside the `backend/` folder (`c:\Coding\AI4BHARAT\backend\.env`) with the following contents:
 
 ```env
-# Database Credentials
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password
-POSTGRES_DB=tendermind
+# Supabase Database URL
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+
+# Redis Broker (Upstash URL or local Windows Redis)
+REDIS_URL=rediss://default:password@your-upstash.upstash.io:33950
 
 # AI Provider
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Directory to store uploaded files
+UPLOAD_ROOT=./uploads
 ```
-
-### 3. Build and Run
-Start the entire stack using Docker Compose:
-
-```bash
-docker-compose up --build
-```
-
-This will spin up 5 containers:
-- `tendermind-db`: PostgreSQL database.
-- `tendermind-redis`: Redis message broker.
-- `tendermind-api`: FastAPI backend (Port `8000`).
-- `tendermind-worker`: Celery worker for async processing.
-- `tendermind-flower`: Celery monitoring dashboard (Port `5555`).
-- `tendermind-frontend`: Frontend UI (Port `3000`).
-
-### 4. Verify Services
-Check that everything is healthy:
-
-- **Deep Health Check:** [http://localhost:8000/health](http://localhost:8000/health) 
-  *(Should return `{"api":"ok","db":"ok","redis":"ok"}`)*
-- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Celery Flower Dashboard:** [http://localhost:5555](http://localhost:5555)
 
 ---
 
-## 🧪 How to Test the Pipeline (Demo Flow)
+## 📦 3. Virtual Environment & Dependencies
 
-Use the Swagger UI ([http://localhost:8000/docs](http://localhost:8000/docs)) or `curl` to test the pipeline.
+A virtual environment has been created for you. To activate it and ensure all dependencies are installed, open a terminal in the `backend/` folder:
+
+```powershell
+cd c:\Coding\AI4BHARAT\backend
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+*Note: The system automatically installed this for you just now, but use this command to add new packages in the future.*
+
+---
+
+## 🏃 4. Running the Application Natively
+
+You need **two** separate terminal windows to run the stack.
+
+### Terminal 1: Start the FastAPI Server
+This runs the main API that accepts uploads and serves the frontend.
+
+```powershell
+cd c:\Coding\AI4BHARAT\backend
+venv\Scripts\activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+*(The first time you run this, it will automatically connect to Supabase and create all necessary tables!)*
+
+### Terminal 2: Start the Celery Worker
+This background worker processes the heavy OCR and AI extraction tasks. Because you are on Windows, we must run Celery with the `--pool=solo` flag.
+
+```powershell
+cd c:\Coding\AI4BHARAT\backend
+venv\Scripts\activate
+celery -A workers.tasks worker --loglevel=info --pool=solo
+```
+
+---
+
+## ✅ 5. Verify the System
+
+1. **Deep Health Check:** Open [http://localhost:8000/health](http://localhost:8000/health)
+   *(Should return `{"api":"ok","db":"ok","redis":"ok"}`. This confirms your Supabase and Redis connections are working!)*
+2. **API Docs:** Open [http://localhost:8000/docs](http://localhost:8000/docs) to see your endpoints and test them.
+
+---
+
+## 🧪 How to Test the Pipeline
 
 ### Step 1: Upload a Tender
-Upload a PDF or DOCX file to simulate creating a new tender.
-
-```bash
-curl -X POST "http://localhost:8000/api/upload/tender" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@/path/to/your/tender.pdf"
-```
-*Note the `id` returned in the response (e.g., `1`).*
-
-*Check Flower ([http://localhost:5555](http://localhost:5555)) to watch the `process_tender` task execute.*
+Using the Swagger UI at `http://localhost:8000/docs`, find the `POST /api/upload/tender` endpoint and upload a PDF. 
+- Watch **Terminal 2** (Celery worker). You will see it ingest the document and call Gemini to extract criteria.
 
 ### Step 2: Upload Bidder Documents
-Upload one or more documents for a bidder, linking them to the tender ID.
-
-```bash
-curl -X POST "http://localhost:8000/api/upload/bidder" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "tender_id=1" \
-     -F "vendor_name=Acme Corp" \
-     -F "files=@/path/to/bidder_doc1.pdf" \
-     -F "files=@/path/to/bidder_doc2.docx"
-```
-
-*Check Flower to watch the `evaluate_bidder` task execute.*
+Find the `POST /api/upload/bidder` endpoint. Enter the `tender_id` returned from Step 1, a `vendor_name`, and upload bidder PDFs.
+- Watch **Terminal 2**. The worker will evaluate the bidder against the criteria.
 
 ### Step 3: View the Scorecard
-Once the evaluation is complete, retrieve the ranked scorecard:
-
-```bash
-curl -X GET "http://localhost:8000/api/tenders/1/scorecard" -H "accept: application/json"
-```
-
-### Step 4: Stream Real-Time Status
-To see the Server-Sent Events (SSE) stream in action:
-
-```bash
-curl -N "http://localhost:8000/api/tenders/1/stream"
-```
+Go to `GET /api/tenders/{id}/scorecard` and execute it. You will see a fully ranked compliance scorecard.
 
 ---
 
-## 🏗️ Architecture Overview
+## ⚠️ Troubleshooting
 
-The pipeline handles asynchronous, robust document processing:
-
-1. **Upload API:** Receives files, saves them to a shared volume (`uploads_data`), creates DB records, and queues Celery tasks. Limits files to 50MB and validates MIME types.
-2. **Celery Worker:**
-   - **Tender Task:** Ingests the tender, chunks it, and uses Gemini to extract mandatory/optional criteria with weights.
-   - **Bidder Task:** Ingests bidder files and uses a localized `SentenceTransformer` to find relevant chunks. Uses Gemini to evaluate the bidder against the tender criteria.
-3. **Ingestion Processor:** Handles PDF (digital and OCR-fallback using Tesseract), DOCX (including tables), and images.
-4. **Resilience:** Implements exponential backoff for AI rate limits, page-level OCR timeouts, database connection pooling with pre-ping, and idempotent task execution.
-
----
-
-## 🛠️ Important Commands for Team
-
-**View Backend Logs (API & Worker):**
-```bash
-docker-compose logs -f api worker
-```
-
-**Access the Database:**
-```bash
-docker exec -it tendermind-db psql -U postgres -d tendermind
-```
-
-**Restart Worker (Useful if you change backend code):**
-```bash
-docker-compose restart worker
-```
-
-**Simulate a Corrupt PDF (To test error handling):**
-```bash
-python -c "open('corrupt.pdf','wb').write(b'%PDF-1.4 THIS IS GARBAGE')"
-curl -F "file=@corrupt.pdf" http://localhost:8000/api/upload/tender
-```
+- **Supabase SSL Error**: If you get a connection error from Supabase about SSL, append `?sslmode=require` to your `DATABASE_URL`.
+- **Tesseract Error**: If the Celery worker crashes when processing a scanned PDF, saying `tesseract is not installed`, you need to explicitly point Python to the `tesseract.exe` path. Add this to your `.env` file:
+  `TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"`
+  And modify `backend/ingestion/processor.py` to read it: `pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_CMD")`
