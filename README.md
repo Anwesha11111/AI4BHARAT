@@ -1,5 +1,4 @@
 # TenderMind API & Pipeline (FastAPI + PostgreSQL + Celery + LangChain)
-
 TenderMind is an AI-powered co-pilot for government procurement. It uses:
 - **Backend**: FastAPI
 - **Database**: PostgreSQL (SQLAlchemy ORM)
@@ -146,3 +145,9 @@ Go to `GET /api/tenders/{id}/scorecard` and execute it. You will see a fully ran
 - **Tesseract Error**: If the Celery worker crashes when processing a scanned PDF, saying `tesseract is not installed`, you need to explicitly point Python to the `tesseract.exe` path. Add this to your `.env` file:
   `TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"`
   And modify `backend/ingestion/processor.py` to read it: `pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_CMD")`
+
+## TEAM MEMBERS- 
+Shashank
+Anwesha Mohapatra
+Avishkar More
+Aayushi Priya
