@@ -36,6 +36,9 @@ class TenderSummary(BaseModel):
     bidder_count: int
     criteria_count: int
     has_recommendation: bool
+    ai_winner_name: Optional[str]
+    ai_winner_score: Optional[float]
+    ai_confidence: Optional[float]
 
     class Config:
         from_attributes = True
@@ -99,6 +102,17 @@ async def get_all_tenders(
 
     result = []
     for tender in tenders:
+        # Extract AI recommendation details
+        ai_rec = tender.ai_recommendation
+        ai_winner_name = None
+        ai_winner_score = None
+        ai_confidence = None
+        if ai_rec and isinstance(ai_rec, dict):
+            rec = ai_rec.get("recommendation", {})
+            ai_winner_name = rec.get("winner_name")
+            ai_winner_score = rec.get("winner_score")
+            ai_confidence = rec.get("confidence")
+
         result.append(TenderSummary(
             id=tender.id,
             title=tender.title or f"Tender #{tender.id}",
@@ -109,7 +123,10 @@ async def get_all_tenders(
             created_at=tender.created_at.isoformat() if tender.created_at else None,
             bidder_count=len(tender.bidders),
             criteria_count=len(tender.criteria),
-            has_recommendation=tender.ai_recommendation is not None
+            has_recommendation=tender.ai_recommendation is not None,
+            ai_winner_name=ai_winner_name,
+            ai_winner_score=ai_winner_score,
+            ai_confidence=ai_confidence
         ))
 
     return result

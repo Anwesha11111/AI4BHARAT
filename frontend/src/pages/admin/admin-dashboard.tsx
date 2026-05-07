@@ -56,6 +56,9 @@ type TenderSummary = {
   bidder_count: number;
   criteria_count: number;
   has_recommendation: boolean;
+  ai_winner_name: string | null;
+  ai_winner_score: number | null;
+  ai_confidence: number | null;
 };
 
 const AdminDashboard = () => {
@@ -280,11 +283,18 @@ const AdminDashboard = () => {
                         <span className="text-slate-700">{tender.bidder_count}</span>
                       </TableCell>
                       <TableCell>
-                        {tender.has_recommendation ? (
-                          <Badge className="bg-purple-100 text-purple-700">
-                            <Bot className="mr-1 size-3" />
-                            Ready
-                          </Badge>
+                        {tender.has_recommendation && tender.ai_winner_name ? (
+                          <div className="space-y-1">
+                            <Badge className="bg-purple-100 text-purple-700">
+                              <Bot className="mr-1 size-3" />
+                              {tender.ai_winner_name}
+                            </Badge>
+                            <p className="text-xs text-slate-500">
+                              Score: {tender.ai_winner_score?.toFixed(1)} | Conf: {((tender.ai_confidence || 0) * 100).toFixed(0)}%
+                            </p>
+                          </div>
+                        ) : tender.bidder_count > 0 ? (
+                          <span className="text-slate-400">Run AI</span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}

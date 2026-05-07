@@ -60,7 +60,7 @@ const SignupPage = () => {
     setIsSubmitting(true);
     try {
       await register(email, password, role, name, role === "company" ? companyName : undefined);
-      navigate(role === "admin" ? "/admin" : "/dashboard");
+      navigate(role === "admin" ? "/admin" : "/company");
     } catch (err) {
       setErrors({ email: err instanceof Error ? err.message : "Registration failed" });
     } finally {
