@@ -79,7 +79,7 @@ class Bidder(Base):
     submission_date = Column(DateTime, default=datetime.datetime.utcnow)
     
     vendor = relationship("Vendor")
-    tender = relationship("Tender", back_populates="bidders")
+    tender = relationship("Tender", back_populates="bidders", foreign_keys=[tender_id])
     verdicts = relationship("Verdict", back_populates="bidder")
     documents = relationship("Document", back_populates="bidder")
     
