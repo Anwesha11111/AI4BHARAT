@@ -10,15 +10,18 @@ type User = {
   id: number;
   email: string;
   full_name: string | null;
-  role: string;
+  role: "company" | "admin";
+  company_name: string | null;
 };
 
 type AuthContextType = {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  isAdmin: boolean;
+  isCompany: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  register: (email: string, password: string, role: "company" | "admin", fullName?: string, companyName?: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -87,10 +90,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     localStorage.setItem(TOKEN_KEY, accessToken);
     setToken(accessToken);
-    await fetchUser(accessToken);
+
+    // Use user data from login response if available
+    if (data.user) {
+      setUser(data.user);
+      setIsLoading(false);
+    } else {
+      await fetchUser(accessToken);
+    }
   }
 
-  async function register(email: string, password: string, fullName?: string) {
+  async function register(
+    email: string,
+    password: string,
+    role: "company" | "admin",
+    fullName?: string,
+    companyName?: string
+  ) {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       headers: {
@@ -99,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({
         email,
         password,
+        role,
         full_name: fullName || null,
+        company_name: companyName || null,
       }),
     });
 
@@ -117,8 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  const isAdmin = user?.role === "admin";
+  const isCompany = user?.role === "company";
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isAdmin, isCompany, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

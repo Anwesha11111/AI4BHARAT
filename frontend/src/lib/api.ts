@@ -181,6 +181,27 @@ export const api = {
     return request<ApiAuditLog[]>(`/tenders/${tenderId}/audit`);
   },
 
+  async getTenderDocuments(tenderId: number): Promise<{
+    tender_id: number;
+    documents: Array<{
+      type: string;
+      id: number;
+      name: string;
+      path: string;
+      bidder_name?: string;
+    }>;
+  }> {
+    return request(`/tenders/${tenderId}/documents`);
+  },
+
+  getTenderDocumentUrl(tenderId: number): string {
+    return `${API_BASE_URL}/tenders/${tenderId}/document`;
+  },
+
+  getBidderDocumentUrl(bidderId: number, filename: string): string {
+    return `${API_BASE_URL}/bidders/${bidderId}/document/${encodeURIComponent(filename)}`;
+  },
+
   streamTenderStatus(
     tenderId: number,
     onMessage: (data: ApiTenderStatus) => void,

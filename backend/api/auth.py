@@ -39,6 +39,8 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
+    role: str = "company"  # "company" or "admin"
+    company_name: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -46,10 +48,17 @@ class UserResponse(BaseModel):
     email: str
     full_name: Optional[str]
     role: str
+    company_name: Optional[str]
     is_active: bool
 
     class Config:
         from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -124,11 +133,20 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Validate role
+    if user_data.role not in ("company", "admin"):
+        raise HTTPException(status_code=400, detail="Role must be 'company' or 'admin'")
+
+    # Company role requires company_name
+    if user_data.role == "company" and not user_data.company_name:
+        raise HTTPException(status_code=400, detail="Company name is required for company accounts")
+
     user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
         full_name=user_data.full_name,
-        role="reviewer",
+        role=user_data.role,
+        company_name=user_data.company_name,
     )
     db.add(user)
     db.commit()
@@ -136,7 +154,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return user
 
 
-@auth_router.post("/login", response_model=Token)
+@auth_router.post("/login", response_model=TokenResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -152,7 +170,11 @@ async def login(
     access_token = create_access_token(
         data={"sub": user.email, "role": user.role}
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
 
 
 @auth_router.get("/me", response_model=UserResponse)

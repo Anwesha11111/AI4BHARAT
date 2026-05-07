@@ -26,6 +26,10 @@ const UploadTenderPage = lazy(
   () => import("@/pages/tender/upload-tender-page"),
 );
 
+// Admin pages
+const AdminDashboard = lazy(() => import("@/pages/admin/admin-dashboard"));
+const AdminTenderDetail = lazy(() => import("@/pages/admin/admin-tender-detail"));
+
 export const AppRoutes = () => {
   return (
     <Routes>
@@ -51,6 +55,10 @@ export const AppRoutes = () => {
         <Route path="/tender/:id/final" element={<FinalPage />} />
         <Route path="/tender/:id/audit" element={<AuditPage />} />
       </Route>
+
+      {/* Admin Routes */}
+      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/admin/tender/:id" element={<AdminTenderDetail />} />
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

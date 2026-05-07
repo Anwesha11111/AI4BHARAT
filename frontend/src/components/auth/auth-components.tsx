@@ -15,6 +15,7 @@ export type FieldErrors = {
   email?: string;
   name?: string;
   password?: string;
+  companyName?: string;
 };
 
 type AuthInputProps = {

@@ -50,7 +50,18 @@ const LoginPage = () => {
     setIsSubmitting(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
+      // Check user role from localStorage token or auth context
+      const token = localStorage.getItem("tendermind_token");
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          navigate(payload.role === "admin" ? "/admin" : "/dashboard");
+        } catch {
+          navigate("/dashboard");
+        }
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setErrors({ password: err instanceof Error ? err.message : "Login failed" });
     } finally {

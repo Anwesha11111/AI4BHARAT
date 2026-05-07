@@ -25,18 +25,33 @@ class Tender(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(Text)
-    file_path = Column(String, unique=True, nullable=True)  # ✅ Prevent duplicate uploads
+    file_path = Column(String, unique=True, nullable=True)
     raw_text = Column(Text)
     status = Column(String, default="uploaded", nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
+
+    # Company submission tracking
+    submitted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_by_user = relationship("User", back_populates="submitted_tenders", foreign_keys=[submitted_by])
+
+    # Admin approval workflow
+    admin_status = Column(String, default="pending")  # pending, approved, rejected
+    admin_reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    admin_review_date = Column(DateTime, nullable=True)
+    admin_notes = Column(Text, nullable=True)
+
+    # AI recommendation
+    ai_recommendation = Column(JSON, nullable=True)  # Stores winner recommendation
+    recommended_bidder_id = Column(Integer, ForeignKey("bidders.id"), nullable=True)
+
     criteria = relationship("Criterion", back_populates="tender")
-    bidders = relationship("Bidder", back_populates="tender")
+    bidders = relationship("Bidder", back_populates="tender", foreign_keys="Bidder.tender_id")
     documents = relationship("Document", back_populates="tender")
-    
+
     __table_args__ = (
         Index('idx_tender_status', 'status'),
         Index('idx_tender_created', 'created_at'),
+        Index('idx_tender_admin_status', 'admin_status'),
     )
 
 class Criterion(Base):
@@ -145,6 +160,10 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=True)
-    role = Column(String, default="reviewer")  # admin, reviewer, viewer
+    company_name = Column(String, nullable=True)  # For company users
+    role = Column(String, default="company")  # company, admin
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationship to tenders submitted by this company
+    submitted_tenders = relationship("Tender", back_populates="submitted_by_user", foreign_keys="Tender.submitted_by")

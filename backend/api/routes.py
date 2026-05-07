@@ -451,3 +451,106 @@ async def get_audit_log(id: int, db: Session = Depends(get_db)):
         }
         for log in logs
     ]
+
+
+# ─── Document Viewing ─────────────────────────────────────────────────────────
+
+@router.get("/tenders/{id}/document", summary="Get tender document for viewing")
+async def get_tender_document(id: int, db: Session = Depends(get_db)):
+    """Returns tender document file for viewing/download."""
+    from fastapi.responses import FileResponse
+
+    tender = db.query(Tender).filter(Tender.id == id).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+
+    if not tender.file_path or not os.path.exists(tender.file_path):
+        raise HTTPException(status_code=404, detail="Document file not found")
+
+    filename = os.path.basename(tender.file_path)
+    ext = os.path.splitext(filename)[1].lower()
+
+    media_types = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+    }
+
+    return FileResponse(
+        tender.file_path,
+        media_type=media_types.get(ext, "application/octet-stream"),
+        filename=tender.title or filename
+    )
+
+
+@router.get("/tenders/{id}/documents", summary="List all documents for a tender")
+async def list_tender_documents(id: int, db: Session = Depends(get_db)):
+    """Returns list of all documents associated with a tender."""
+    tender = db.query(Tender).filter(Tender.id == id).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+
+    documents = []
+
+    # Tender document
+    if tender.file_path and os.path.exists(tender.file_path):
+        documents.append({
+            "type": "tender",
+            "id": tender.id,
+            "name": tender.title or os.path.basename(tender.file_path),
+            "path": f"/api/tenders/{id}/document"
+        })
+
+    # Bidder documents
+    bidders = db.query(Bidder).filter(Bidder.tender_id == id).all()
+    for bidder in bidders:
+        if bidder.folder_path and os.path.exists(bidder.folder_path):
+            for filename in os.listdir(bidder.folder_path):
+                documents.append({
+                    "type": "bidder",
+                    "id": bidder.id,
+                    "bidder_name": bidder.vendor.name if bidder.vendor else f"Bidder {bidder.id}",
+                    "name": filename,
+                    "path": f"/api/bidders/{bidder.id}/document/{filename}"
+                })
+
+    return {"tender_id": id, "documents": documents}
+
+
+@router.get("/bidders/{bidder_id}/document/{filename}", summary="Get bidder document")
+async def get_bidder_document(bidder_id: int, filename: str, db: Session = Depends(get_db)):
+    """Returns a specific bidder document file."""
+    from fastapi.responses import FileResponse
+
+    bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
+    if not bidder:
+        raise HTTPException(status_code=404, detail="Bidder not found")
+
+    if not bidder.folder_path:
+        raise HTTPException(status_code=404, detail="No documents for this bidder")
+
+    # Security: prevent path traversal
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(bidder.folder_path, safe_filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    ext = os.path.splitext(safe_filename)[1].lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+    }
+
+    return FileResponse(
+        file_path,
+        media_type=media_types.get(ext, "application/octet-stream"),
+        filename=safe_filename
+    )

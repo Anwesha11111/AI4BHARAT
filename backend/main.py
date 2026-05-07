@@ -14,6 +14,7 @@ from collections import defaultdict
 from api.routes import router as api_router
 from api.export import export_router
 from api.auth import auth_router
+from api.admin import admin_router
 from db.database import init_db, get_db, engine
 from fastapi import Depends
 
@@ -102,6 +103,7 @@ async def rate_limit_middleware(request: Request, call_next):
 app.include_router(api_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
 
