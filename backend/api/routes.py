@@ -4,16 +4,34 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from db.database import get_db, SessionLocal
 from db.models import Tender, Bidder, Criterion, Verdict, AuditLog, Vendor, User
-from workers.tasks import process_tender_async, evaluate_bidder_async
 from api.auth import get_current_user, oauth2_scheme
 import os
 import json
 import asyncio
 import uuid
 import logging
+import socket
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Check if Redis is available (for Celery)
+def _check_redis():
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(('localhost', 6379))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+REDIS_AVAILABLE = _check_redis()
+if REDIS_AVAILABLE:
+    from workers.tasks import process_tender_async, evaluate_bidder_async
+    logger.info("Redis available - Celery tasks enabled")
+else:
+    logger.warning("Redis not available - Celery tasks disabled, uploads will be instant")
 
 UPLOAD_DIR = os.getenv("UPLOAD_ROOT", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -153,22 +171,20 @@ async def upload_tender(
               new_value={"file_path": file_path, "size_bytes": size, "submitted_by": current_user.id})
     db.commit()
 
-    # Try to queue async processing (requires Redis)
-    processing_queued = False
-    try:
+    # Queue async processing only if Redis is available
+    if REDIS_AVAILABLE:
         process_tender_async.delay(new_tender.id)
-        processing_queued = True
         logger.info("Tender %s uploaded by %s (%d bytes), processing queued", new_tender.id, current_user.email, size)
-    except Exception as e:
-        logger.warning("Celery/Redis not available, skipping async processing: %s", e)
-        # Mark as completed for demo (processing will be manual)
+    else:
+        # Mark as completed for demo when Redis not available
         new_tender.status = "completed"
         db.commit()
+        logger.info("Tender %s uploaded by %s (%d bytes), marked complete (no Redis)", new_tender.id, current_user.email, size)
 
     return {
         "id": new_tender.id,
         "status": new_tender.status,
-        "message": "Tender upload successful." + (" Processing started." if processing_queued else " Ready for review."),
+        "message": "Tender upload successful." + (" Processing started." if REDIS_AVAILABLE else " Ready for review."),
     }
 
 
@@ -279,22 +295,20 @@ async def upload_bidder(
     )
     db.commit()
 
-    # Try to queue async evaluation (requires Redis)
-    evaluation_queued = False
-    try:
+    # Queue async evaluation only if Redis is available
+    if REDIS_AVAILABLE:
         evaluate_bidder_async.delay(new_bidder.id)
-        evaluation_queued = True
         logger.info("Bidder %s uploaded (%d files), evaluation queued", new_bidder.id, len(stored_files))
-    except Exception as e:
-        logger.warning("Celery/Redis not available, skipping async evaluation: %s", e)
+    else:
         new_bidder.status = "completed"
         db.commit()
+        logger.info("Bidder %s uploaded (%d files), marked complete (no Redis)", new_bidder.id, len(stored_files))
 
     return {
         "id": new_bidder.id,
         "status": new_bidder.status,
         "file_count": len(stored_files),
-        "message": "Bidder submission accepted." + (" Evaluation started." if evaluation_queued else " Ready for review."),
+        "message": "Bidder submission accepted." + (" Evaluation started." if REDIS_AVAILABLE else " Ready for review."),
     }
 
 
