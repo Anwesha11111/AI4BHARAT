@@ -260,7 +260,14 @@ async def run_ai_recommendation(
     current_user: User = Depends(require_role("admin"))
 ):
     """Run AI multi-agent system to get winner recommendation."""
-    from ai.agents import orchestrator
+    try:
+        from ai.agents import orchestrator
+    except ImportError as e:
+        logger.error(f"Failed to import AI agents: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="AI system not available. Please ensure all dependencies are installed."
+        )
 
     tender = db.query(Tender).options(
         joinedload(Tender.criteria),

@@ -10,6 +10,7 @@ redis
 python-multipart
 python-dotenv
 langchain
+langchain-core
 langchain-ollama
 pymupdf
 python-docx
