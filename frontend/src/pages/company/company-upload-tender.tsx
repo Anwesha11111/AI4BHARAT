@@ -32,6 +32,7 @@ const CompanyUploadTender = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [uploadedTenderId, setUploadedTenderId] = useState<number | null>(null);
@@ -79,39 +80,53 @@ const CompanyUploadTender = () => {
     }
 
     setUploading(true);
+    setUploadProgress(0);
     setError(null);
 
     const formData = new FormData();
     formData.append("file", file);
 
-    try {
-      const token = getAuthToken();
-      const res = await fetch(`${API_BASE_URL}/upload/tender`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+    const token = getAuthToken();
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Upload failed");
+    // Use XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        setUploadProgress(percent);
       }
+    });
 
-      const data = await res.json();
-      setSuccess(true);
-      setUploadedTenderId(data.id);
-
-      // Show notification and redirect after delay
-      setTimeout(() => {
-        navigate("/company");
-      }, 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
+    xhr.addEventListener("load", () => {
       setUploading(false);
-    }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          setSuccess(true);
+          setUploadedTenderId(data.id);
+          setTimeout(() => navigate("/company"), 2000);
+        } catch {
+          setError("Invalid response from server");
+        }
+      } else {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          setError(data.detail || "Upload failed");
+        } catch {
+          setError("Upload failed");
+        }
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      setUploading(false);
+      setError("Network error - check your connection");
+    });
+
+    xhr.open("POST", `${API_BASE_URL}/upload/tender`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(formData);
   };
 
   if (success && uploadedTenderId) {
@@ -222,23 +237,33 @@ const CompanyUploadTender = () => {
               )}
             </div>
 
-            <Button
-              onClick={handleUpload}
-              disabled={!file || uploading}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="size-4" />
-                  Submit Tender
-                </>
+            <div className="space-y-2">
+              {uploading && (
+                <div className="w-full bg-slate-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
               )}
-            </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={!file || uploading}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Uploading... {uploadProgress}%
+                  </>
+                ) : (
+                  <>
+                    <Upload className="size-4" />
+                    Submit Tender
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </main>
