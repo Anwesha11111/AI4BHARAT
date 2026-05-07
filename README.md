@@ -2,6 +2,62 @@
 
 TenderMind is an intelligent platform that automates tender evaluation using a multi-agent AI system. It helps government agencies and companies streamline the procurement process by automatically extracting criteria from tender documents, evaluating bidder submissions, and recommending winners.
 
+---
+
+## Instructions to Run (For Reviewers)
+
+### Quick Start (4 Steps)
+
+**Step 1: Start Backend**
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Mac/Linux
+pip install -r requirements.txt
+python seed_data.py          # Creates demo data
+python main.py               # Starts server on port 8000
+```
+
+**Step 2: Start Frontend** (new terminal)
+```bash
+cd frontend
+npm install
+npm run dev                  # Starts on port 5173 or 3001
+```
+
+**Step 3: Open Browser**
+- Frontend: http://localhost:5173 (or http://localhost:3001)
+- API Docs: http://localhost:8000/docs
+
+**Step 4: Login with Demo Credentials**
+
+| Role | Email | Password |
+|------|-------|----------|
+| **Admin** | `admin@gov.in` | `test123` |
+| **Company** | `contact@tataprojects.com` | `test123` |
+
+### What to Test
+
+1. **Admin Dashboard** (`/admin`)
+   - View "AI Recommendations" section showing which tender should go to which company
+   - See tender list with bidder counts and AI suggestions
+   - Click "View" to see detailed tender analysis
+   - Approve/Reject pending tenders
+   - Run AI recommendation on approved tenders
+
+2. **Company Dashboard** (`/company`)
+   - View submitted tenders
+   - Upload new tender documents
+   - Track tender status
+
+3. **AI Features**
+   - Multi-agent system evaluates bidders using Retriever, Reasoner, Critic, Synthesizer
+   - AI recommends winner with confidence score
+   - Compliance scoring with mandatory/optional criteria weighting
+
+---
+
 ## Features
 
 - **Role-Based Access**: Separate dashboards for Companies (submit tenders) and Admins (review & approve)
@@ -306,11 +362,23 @@ kill -9 <PID>
 ```
 
 ### Database Errors
-Delete the database file to reset:
+Delete the database file and re-seed:
 ```bash
-rm backend/tendermind.db
-python main.py  # Recreates fresh database
+rm backend/tendermind.db      # Or del on Windows
+python seed_data.py           # Recreates with demo data
+python main.py                # Start server
 ```
+
+### No Data / Empty Dashboard
+Run the seed script to populate demo data:
+```bash
+cd backend
+python seed_data.py
+```
+This creates:
+- 2 admin users, 5 company users
+- 8 vendors, 4 tenders with criteria
+- Bidders with verdicts and AI recommendations
 
 ### Tesseract Not Found
 Set the path in `.env`:
