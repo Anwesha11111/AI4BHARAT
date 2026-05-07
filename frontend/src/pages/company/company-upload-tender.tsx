@@ -254,7 +254,7 @@ const CompanyUploadTender = () => {
                 {uploading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Uploading... {uploadProgress}%
+                    {uploadProgress < 100 ? `Uploading... ${uploadProgress}%` : "Processing..."}
                   </>
                 ) : (
                   <>
