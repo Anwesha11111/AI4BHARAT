@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Lock, Loader2, Mail } from "lucide-react";
+import { ArrowRight, Lock, Loader2, Mail, Building2, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
 import {
@@ -22,13 +21,16 @@ import {
 
 import { validateEmail } from "@/utils/auth-utils";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
+
+type LoginRole = "company" | "admin";
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const [loginRole, setLoginRole] = useState<LoginRole>("company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +40,7 @@ const LoginPage = () => {
 
     const nextErrors: FieldErrors = {};
     if (!validateEmail(email)) {
-      nextErrors.email = "Enter a valid work email address.";
+      nextErrors.email = "Enter a valid email address.";
     }
     if (!password) {
       nextErrors.password = "Password is required.";
@@ -49,18 +51,12 @@ const LoginPage = () => {
 
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      // Check user role from localStorage token or auth context
-      const token = localStorage.getItem("tendermind_token");
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          navigate(payload.role === "admin" ? "/admin" : "/dashboard");
-        } catch {
-          navigate("/dashboard");
-        }
+      const user = await login(email, password);
+      // Redirect based on actual user role from server
+      if (user.role === "admin") {
+        navigate("/admin");
       } else {
-        navigate("/dashboard");
+        navigate("/company");
       }
     } catch (err) {
       setErrors({ password: err instanceof Error ? err.message : "Login failed" });
@@ -77,12 +73,46 @@ const LoginPage = () => {
             Welcome back
           </CardTitle>
           <CardDescription className="text-base">
-            Login to your account
+            Login to your TenderMind account
           </CardDescription>
         </CardHeader>
 
         <CardContent className="px-6 pb-6">
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700">
+                Login as
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLoginRole("company")}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all",
+                    loginRole === "company"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  )}
+                >
+                  <Building2 className="size-5" />
+                  <span className="text-sm font-medium">Company</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginRole("admin")}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all",
+                    loginRole === "admin"
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  )}
+                >
+                  <Shield className="size-5" />
+                  <span className="text-sm font-medium">Admin</span>
+                </button>
+              </div>
+            </div>
+
             <AuthInput
               id="login-email"
               label="Email"
@@ -91,7 +121,7 @@ const LoginPage = () => {
               value={email}
               error={errors.email}
               onChange={setEmail}
-              placeholder="procurement@agency.gov"
+              placeholder={loginRole === "company" ? "contact@company.com" : "admin@agency.gov"}
             />
 
             <AuthInput
@@ -111,50 +141,23 @@ const LoginPage = () => {
               }
             />
 
-            <div className="flex items-center justify-between gap-4">
-              <Label
-                htmlFor="remember-me"
-                className="flex cursor-pointer items-center gap-2 text-sm font-normal text-slate-600"
-              >
-                <Checkbox
-                  id="remember-me"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked === true)}
-                  className="border-slate-300 data-checked:bg-blue-600 data-checked:border-blue-600"
-                />
-                Remember me
-              </Label>
-              <a
-                href="#forgot-password"
-                className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
-              >
-                Forgot password?
-              </a>
-            </div>
-
             <Button
-              className="h-11 w-full rounded-xl bg-blue-600 text-base text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
+              className={cn(
+                "h-11 w-full rounded-xl text-base text-white shadow-lg",
+                loginRole === "company"
+                  ? "bg-blue-600 shadow-blue-600/20 hover:bg-blue-700"
+                  : "bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700"
+              )}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <>
-                  Login
+                  Login as {loginRole === "company" ? "Company" : "Admin"}
                   <ArrowRight className="size-4" />
                 </>
               )}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl border-slate-200 bg-white text-base shadow-sm hover:bg-slate-50"
-            >
-              <span className="flex size-5 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-700">
-                G
-              </span>
-              Continue with Google
             </Button>
           </form>
 

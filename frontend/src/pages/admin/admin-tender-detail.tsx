@@ -153,7 +153,8 @@ const AdminTenderDetail = () => {
   };
 
   const viewDocument = () => {
-    window.open(`${API_BASE_URL}/tenders/${id}/document`, "_blank");
+    const token = getAuthToken();
+    window.open(`${API_BASE_URL}/tenders/${id}/document?token=${token}`, "_blank");
   };
 
   if (loading) {

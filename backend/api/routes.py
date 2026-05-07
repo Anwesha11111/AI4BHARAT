@@ -1,10 +1,11 @@
-from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from db.database import get_db, SessionLocal
-from db.models import Tender, Bidder, Criterion, Verdict, AuditLog, Vendor
+from db.models import Tender, Bidder, Criterion, Verdict, AuditLog, Vendor, User
 from workers.tasks import process_tender_async, evaluate_bidder_async
+from api.auth import get_current_user, oauth2_scheme
 import os
 import json
 import asyncio
@@ -115,12 +116,21 @@ def is_disqualified(verdicts: list, criteria: list) -> bool:
 # ─── Tender Upload ─────────────────────────────────────────────────────────────
 
 @router.post("/upload/tender", summary="Upload a tender document")
-async def upload_tender(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_tender(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type '{ext}' not supported. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
 
-    new_tender = Tender(title=file.filename, description="Uploaded tender")
+    new_tender = Tender(
+        title=file.filename,
+        description="Uploaded tender",
+        submitted_by=current_user.id,  # Track who submitted
+        admin_status="pending"  # New tenders need admin review
+    )
     db.add(new_tender)
     db.commit()
     db.refresh(new_tender)
@@ -139,12 +149,12 @@ async def upload_tender(file: UploadFile = File(...), db: Session = Depends(get_
 
     new_tender.file_path = file_path
     new_tender.status = "uploaded"
-    log_event(db, "tender", new_tender.id, "tender_uploaded", actor="api",
-              new_value={"file_path": file_path, "size_bytes": size})
+    log_event(db, "tender", new_tender.id, "tender_uploaded", actor=current_user.email,
+              new_value={"file_path": file_path, "size_bytes": size, "submitted_by": current_user.id})
     db.commit()
 
     process_tender_async.delay(new_tender.id)
-    logger.info("Tender %s uploaded (%d bytes), processing queued", new_tender.id, size)
+    logger.info("Tender %s uploaded by %s (%d bytes), processing queued", new_tender.id, current_user.email, size)
 
     return {
         "id": new_tender.id,
@@ -160,14 +170,29 @@ async def upload_tender_legacy(file: UploadFile = File(...), db: Session = Depen
 
 # ─── Tender List ───────────────────────────────────────────────────────────────
 
-@router.get("/tenders", summary="List all tenders")
-async def list_tenders(db: Session = Depends(get_db)):
-    tenders = db.query(Tender).order_by(Tender.id.desc()).all()
+@router.get("/tenders", summary="List tenders for current user")
+async def list_tenders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List tenders based on user role:
+    - Company users: only see their own submitted tenders
+    - Admin users: see all tenders
+    """
+    query = db.query(Tender)
+
+    # Company users only see their own tenders
+    if current_user.role == "company":
+        query = query.filter(Tender.submitted_by == current_user.id)
+
+    tenders = query.order_by(Tender.id.desc()).all()
     return [
         {
             "id": t.id,
             "title": t.title,
             "status": t.status,
+            "admin_status": t.admin_status,
             "created_at": t.created_at.isoformat() if t.created_at else None,
         }
         for t in tenders
@@ -456,13 +481,35 @@ async def get_audit_log(id: int, db: Session = Depends(get_db)):
 # ─── Document Viewing ─────────────────────────────────────────────────────────
 
 @router.get("/tenders/{id}/document", summary="Get tender document for viewing")
-async def get_tender_document(id: int, db: Session = Depends(get_db)):
+async def get_tender_document(
+    id: int,
+    token: Optional[str] = Query(None, description="Auth token for browser viewing"),
+    db: Session = Depends(get_db)
+):
     """Returns tender document file for viewing/download."""
     from fastapi.responses import FileResponse
+    from jose import jwt, JWTError
+
+    # Verify token if provided (for authenticated access)
+    current_user = None
+    if token:
+        try:
+            from api.auth import SECRET_KEY, ALGORITHM
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email = payload.get("sub")
+            if email:
+                current_user = db.query(User).filter(User.email == email).first()
+        except JWTError:
+            pass  # Allow unauthenticated access for now
 
     tender = db.query(Tender).filter(Tender.id == id).first()
     if not tender:
         raise HTTPException(status_code=404, detail="Tender not found")
+
+    # Check ownership for company users
+    if current_user and current_user.role == "company":
+        if tender.submitted_by != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this document")
 
     if not tender.file_path or not os.path.exists(tender.file_path):
         raise HTTPException(status_code=404, detail="Document file not found")

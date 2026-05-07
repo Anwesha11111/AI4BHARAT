@@ -20,8 +20,8 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   isCompany: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, role: "company" | "admin", fullName?: string, companyName?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (email: string, password: string, role: "company" | "admin", fullName?: string, companyName?: string) => Promise<User>;
   logout: () => void;
 };
 
@@ -29,16 +29,20 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 const TOKEN_KEY = "tendermind_token";
+const USER_KEY = "tendermind_user";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem(USER_KEY);
+    return saved ? JSON.parse(saved) : null;
+  });
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem(TOKEN_KEY);
   });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
+    if (token && !user) {
       fetchUser(token);
     } else {
       setIsLoading(false);
@@ -55,19 +59,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        localStorage.setItem(USER_KEY, JSON.stringify(userData));
       } else {
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
         setToken(null);
+        setUser(null);
       }
     } catch {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
       setToken(null);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string): Promise<User> {
     const formData = new URLSearchParams();
     formData.append("username", email);
     formData.append("password", password);
@@ -87,17 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json();
     const accessToken = data.access_token;
+    const userData = data.user;
 
     localStorage.setItem(TOKEN_KEY, accessToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(userData));
     setToken(accessToken);
+    setUser(userData);
+    setIsLoading(false);
 
-    // Use user data from login response if available
-    if (data.user) {
-      setUser(data.user);
-      setIsLoading(false);
-    } else {
-      await fetchUser(accessToken);
-    }
+    return userData;
   }
 
   async function register(
@@ -106,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: "company" | "admin",
     fullName?: string,
     companyName?: string
-  ) {
+  ): Promise<User> {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       headers: {
@@ -126,11 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || "Registration failed");
     }
 
-    await login(email, password);
+    return await login(email, password);
   }
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
   }

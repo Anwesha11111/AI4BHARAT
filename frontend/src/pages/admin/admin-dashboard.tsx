@@ -60,7 +60,7 @@ type TenderSummary = {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [tenders, setTenders] = useState<TenderSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +177,9 @@ const AdminDashboard = () => {
             <Button variant="outline" size="sm" onClick={fetchData}>
               <RefreshCw className="size-4" />
               Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={logout}>
+              Logout
             </Button>
           </div>
         </div>
