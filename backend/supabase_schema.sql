@@ -1,0 +1,13 @@
+-- DEPRECATED: This file is no longer used
+--
+-- Database schema is now automatically created by SQLAlchemy ORM
+-- See: backend/db/models.py
+--
+-- Migration is automatic on first API startup:
+-- 1. API container starts
+-- 2. main.py imports db.models (triggers model registration)
+-- 3. db.init_db() called → Base.metadata.create_all(bind=engine)
+-- 4. All tables with proper indexes created automatically
+--
+-- No manual SQL needed. This file kept for reference only.
+
