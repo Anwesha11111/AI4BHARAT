@@ -102,6 +102,11 @@ const CompanyUploadTender = () => {
       const data = await res.json();
       setSuccess(true);
       setUploadedTenderId(data.id);
+
+      // Show notification and redirect after delay
+      setTimeout(() => {
+        navigate("/company");
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -111,39 +116,24 @@ const CompanyUploadTender = () => {
 
   if (success && uploadedTenderId) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/company")}>
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
-            <h1 className="text-xl font-semibold text-slate-900">Upload Tender</h1>
-          </div>
-        </header>
-
-        <main className="mx-auto max-w-3xl px-6 py-8">
-          <Card className="border-emerald-200 bg-emerald-50">
-            <CardContent className="flex flex-col items-center gap-4 py-12">
-              <CheckCircle className="size-16 text-emerald-600" />
-              <h2 className="text-2xl font-semibold text-emerald-800">Tender Submitted!</h2>
-              <p className="text-center text-emerald-700">
-                Your tender has been uploaded successfully and is pending admin review.
-              </p>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => navigate("/company")}>
-                  Back to Dashboard
-                </Button>
-                <Button
-                  onClick={() => navigate(`/company/tender/${uploadedTenderId}`)}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  View Tender
-                </Button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <Card className="border-emerald-400 bg-white shadow-2xl animate-in fade-in zoom-in duration-300 max-w-md mx-4">
+            <CardContent className="flex flex-col items-center gap-4 py-10 px-8">
+              <div className="rounded-full bg-emerald-100 p-4">
+                <CheckCircle className="size-16 text-emerald-600" />
               </div>
+              <h2 className="text-3xl font-bold text-emerald-700">UPLOADED!</h2>
+              <p className="text-center text-slate-600">
+                Your tender has been submitted successfully.
+              </p>
+              <p className="text-sm text-slate-400">
+                Redirecting to dashboard...
+              </p>
+              <Loader2 className="size-5 animate-spin text-emerald-500" />
             </CardContent>
           </Card>
-        </main>
+        </div>
       </div>
     );
   }
