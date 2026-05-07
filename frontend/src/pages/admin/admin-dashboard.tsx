@@ -11,6 +11,9 @@ import {
   XCircle,
   Eye,
   Bot,
+  Trophy,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/lib/auth-context";
 import { getAuthToken } from "@/lib/auth-context";
 
@@ -236,6 +240,74 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* AI Suggestions Section */}
+        {tenders.filter(t => t.has_recommendation && t.ai_winner_name).length > 0 && (
+          <Card className="mb-8 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-purple-600 text-white">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-purple-900">AI Recommendations</CardTitle>
+                  <CardDescription className="text-purple-600">
+                    Our AI has analyzed the bidders and suggests the following winners
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {tenders
+                  .filter(t => t.has_recommendation && t.ai_winner_name)
+                  .map((tender) => (
+                    <div
+                      key={tender.id}
+                      className="flex items-center justify-between rounded-xl border border-purple-200 bg-white p-4 shadow-sm transition-all hover:shadow-md"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex size-12 items-center justify-center rounded-full bg-amber-100">
+                          <Trophy className="size-6 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-500">Tender</p>
+                          <p className="font-semibold text-slate-900">{tender.title}</p>
+                          <p className="text-xs text-slate-400">
+                            Submitted by {tender.submitted_by_company}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ArrowRight className="size-5 text-purple-400" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-slate-500">Recommended Winner</p>
+                        <p className="font-bold text-purple-700">{tender.ai_winner_name}</p>
+                        <div className="flex items-center justify-end gap-2 text-xs">
+                          <span className="text-emerald-600">
+                            Score: {tender.ai_winner_score?.toFixed(1)}
+                          </span>
+                          <span className="text-slate-400">|</span>
+                          <span className="text-blue-600">
+                            Confidence: {((tender.ai_confidence || 0) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="ml-4 bg-purple-600 hover:bg-purple-700"
+                        onClick={() => navigate(`/admin/tender/${tender.id}`)}
+                      >
+                        <Eye className="size-4" />
+                        Review
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
