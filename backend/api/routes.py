@@ -75,32 +75,20 @@ def log_event(db: Session, entity_type: str, entity_id: int, action: str, actor:
     ))
 
 
-async def save_upload_chunked(upload: UploadFile, dest_path: str, extension: str = "") -> int:
-    """Saves an upload in 64KB chunks, enforces MAX_FILE_SIZE and validates magic bytes."""
-    size = 0
-    first_chunk = True
+async def save_upload_fast(upload: UploadFile, dest_path: str, extension: str = "") -> int:
+    """Fast file save - reads entire file at once."""
+    content = await upload.read()
+    size = len(content)
+
+    if size > MAX_FILE_SIZE:
+        raise HTTPException(413, f"File exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
+
+    if extension and not validate_file_magic(content, extension):
+        raise HTTPException(400, f"File content does not match expected format for {extension}")
+
     with open(dest_path, "wb") as f:
-        while True:
-            chunk = await upload.read(65536)
-            if not chunk:
-                break
+        f.write(content)
 
-            if first_chunk and extension:
-                if not validate_file_magic(chunk, extension):
-                    f.close()
-                    os.remove(dest_path)
-                    raise HTTPException(
-                        400,
-                        f"File content does not match expected format for {extension}. Possible file type mismatch."
-                    )
-                first_chunk = False
-
-            size += len(chunk)
-            if size > MAX_FILE_SIZE:
-                f.close()
-                os.remove(dest_path)
-                raise HTTPException(413, f"File exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
-            f.write(chunk)
     return size
 
 
@@ -159,7 +147,7 @@ async def upload_tender(
     file_path = os.path.join(tender_dir, safe_name)
 
     try:
-        size = await save_upload_chunked(file, file_path, ext)
+        size = await save_upload_fast(file, file_path, ext)
     except HTTPException:
         db.delete(new_tender)
         db.commit()
@@ -280,7 +268,7 @@ async def upload_bidder(
             continue
         safe_name = f"{uuid.uuid4().hex}{ext}"
         file_path = os.path.join(bidder_dir, safe_name)
-        await save_upload_chunked(uploaded_file, file_path, ext)
+        await save_upload_fast(uploaded_file, file_path, ext)
         stored_files.append(file_path)
 
     if not stored_files:
